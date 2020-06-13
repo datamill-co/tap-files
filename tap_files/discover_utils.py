@@ -1,7 +1,10 @@
 from datetime import datetime
 
+import dateutil.parser
+
 SDC_SOURCE_PATH_COLUMN = '_sdc_source_path'
 SDC_SOURCE_LINENO_COLUMN = '_sdc_source_lineno'
+SDC_SOURCE_MODIFIED_DATE_COLUMN = '_sdc_source_modified_date'
 
 ALLOWED_SIMPLE_SCHEMA_KEYS = [
     'type',
@@ -42,10 +45,12 @@ def merge_array_schemas(a, b):
 
 def merge_simple_schemas(a, b):
     combined_type = set(a['type'] + b['type']) - set(['object', 'array'])
-    combined_format = set(a.get('format', []) + b.get('format', []))
+    combined_format = set([a.get('format')] + [b.get('format')])
+    if None in combined_format:
+        combined_format.remove(None)
 
     if len(combined_format) > 1 or (len(combined_format) > 0 and combined_format != set(['date-time'])):
-        raise Exception('Only "date-time" JSON format supported')
+        raise Exception('Only "date-time" JSON format supported: {}'.format(combined_format))
 
     schema_keys = set(list(a.keys()) + list(b.keys()))
     if not schema_keys.issubset(ALLOWED_SIMPLE_SCHEMA_KEYS):
@@ -112,56 +117,59 @@ def merge_schemas(schemas):
 
 def infer_type(value):
     if value == '':
-        return None
+        return None, None
+
+    ## Excel and other file formats have a datetime type
+    if isinstance(value, datetime):
+        return 'string', 'date-time'
 
     ## Some formats, like JSON, generate some typed values
     if isinstance(value, int):
-        return 'integer'
+        return 'integer', None
 
     if isinstance(value, float):
-        return 'number'
+        return 'number', None
 
     if isinstance(value, bool):
-        return 'boolean'
+        return 'boolean', None
 
     try:
         int(value)
-        return 'integer'
+        return 'integer', None
     except (ValueError, TypeError):
         pass
 
     try:
         float(value)
-        return 'number'
+        return 'number', None
     except (ValueError, TypeError):
         pass
 
-    return 'string'
+    # try:
+    #     print(value)
+    #     date = dateutil.parser.parse(value)
+    #     print(date)
+    #     print('date!!!!')
+    #     return 'string', 'date-time'
+    # except:
+    #     pass
+
+    return 'string', None
 
 def infer_simple_type_schema(value):
-    ## TODO: check datetime_fields and boolean_fields - support nested paths?
-
-    ## Excel and other file formats have a datetime type
-    if isinstance(value, datetime):
-        return {
-            'type': [
-                'null',
-                'string'
-            ],
-            'format': 'date-time'
-        }
-
-    ## TODO: if type is string, sniff for datetime formats
-
     json_schema = {
         'type': [
             'null'
         ]
     }
 
-    json_type = infer_type(value)
+    json_type, _format = infer_type(value)
+
     if json_type:
         json_schema['type'].append(json_type)
+
+    if _format:
+        json_schema['format'] = _format
 
     return json_schema
 

@@ -18,11 +18,10 @@ LAST_MODIFIED_FIELDS = [
 ]
 
 def get_modified_date(file_cxt):
-    details = getattr(file_cxt, 'details')
-    if details:
+    if hasattr(file_cxt, 'details'):
         for field in LAST_MODIFIED_FIELDS:
-            if field in details:
-                return details[field]
+            if field in file_cxt.details:
+                return file_cxt.details[field]
     return None
 
 def sync_path(stream_config, schema, mdata, discover_mode, path, last_modified_date):
@@ -56,13 +55,13 @@ def sync_path(stream_config, schema, mdata, discover_mode, path, last_modified_d
 
     json_schemas = []
 
-    def handle_file(file_cxt):
+    def handle_file(modified_date, path, file_cxt):
         with file_cxt as file:
             if discover_mode:
-                json_schema = format_handler.discover(stream_config, file_cxt.path, ext, file)
+                json_schema = format_handler.discover(stream_config, path, ext, file, modified_date)
                 json_schemas.append(json_schema)
             else:
-                format_handler.sync(stream_config, schema, mdata, file_cxt.path, ext, file)
+                format_handler.sync(stream_config, schema, mdata, path, ext, file, modified_date)
 
     max_modified_date = last_modified_date
     for file_cxt in files:
@@ -79,11 +78,11 @@ def sync_path(stream_config, schema, mdata, discover_mode, path, last_modified_d
                 if filename.split('.')[-1] in format_handler.extensions:
                     LOGGER.info('{} from archive: {} - {}'.format(operating_mode_log, file_cxt.path, filename))
                     with zip_file.open(filename, mode=format_handler.file_mode) as zip_file_cxt:
-                        handle_file(zip_file_cxt)
+                        handle_file(modified_date, file_cxt.path, zip_file_cxt)
         else:
-            handle_file(file_cxt)
+            handle_file(modified_date, file_cxt.path, file_cxt)
 
-        if modified_date > max_modified_date:
+        if not modified_date or modified_date > max_modified_date:
             max_modified_date = modified_date
 
     return json_schemas, max_modified_date
@@ -106,7 +105,7 @@ def sync_stream(stream_config, catalog, state, discover_mode):
     if not paths or paths[0] is None:
         raise Exception('A stream config requires a "path" or "paths" key')
 
-    last_modified_date = bookmarks.get_bookmark(stream_config['stream_name'], 'last_modified_date')
+    last_modified_date = bookmarks.get_bookmark(state, stream_config['stream_name'], 'last_modified_date')
 
     schemas = []
     max_modified_date = last_modified_date
@@ -118,7 +117,7 @@ def sync_stream(stream_config, catalog, state, discover_mode):
                                                          path,
                                                          last_modified_date)
         schemas += path_schemas
-        if path_max_modified_date > max_modified_date:
+        if not max_modified_date or path_max_modified_date > max_modified_date:
             max_modified_date = path_max_modified_date
 
     if discover_mode:
@@ -202,7 +201,13 @@ def sync(config, catalog, state, discover_mode):
 
         schema = sync_stream(stream_config, catalog, state, discover_mode)
 
-        schemas[stream_name] = schema
+        ## streams config can have multiple entries per stream, ex different paths or file foramts
+        if schema:
+            current_stream_schema = schemas.get(stream_name)
+            if current_stream_schema:
+                schemas[stream_name] = merge_schemas(current_stream_schema, schema)
+            else:
+                schemas[stream_name] = schema
 
     if discover_mode:
         discover(config, schemas)
