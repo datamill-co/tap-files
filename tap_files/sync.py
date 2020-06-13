@@ -4,16 +4,28 @@ import json
 import fsspec
 import singer
 from fsspec.implementations.zip import ZipFileSystem
-from singer import metadata
+from singer import bookmarks, metadata
 from singer.catalog import Catalog, CatalogEntry, Schema
-from singer.bookmarks import set_currently_syncing, get_currently_syncing
 
 from tap_files.format_handlers import FORMAT_HANDLERS_MAP, FORMAT_NAME_EXT_MAP
 from tap_files.discover_utils import merge_schemas
 
 LOGGER = singer.get_logger()
 
-def sync_path(stream_config, schema, mdata, discover_mode, path):
+LAST_MODIFIED_FIELDS = [
+    'LastModified', # s3
+    'mtime' # local, sftp
+]
+
+def get_modified_date(file_cxt):
+    details = getattr(file_cxt, 'details')
+    if details:
+        for field in LAST_MODIFIED_FIELDS:
+            if field in details:
+                return details[field]
+    return None
+
+def sync_path(stream_config, schema, mdata, discover_mode, path, last_modified_date):
     format_options = stream_config.get('format_options', {})
     format_name = format_options.get('format')
     is_zip_archive = format_options.get('is_zip_archive', False)
@@ -47,13 +59,19 @@ def sync_path(stream_config, schema, mdata, discover_mode, path):
     def handle_file(file_cxt):
         with file_cxt as file:
             if discover_mode:
-                json_schema = format_handler.discover(stream_config, path, ext, file)
+                json_schema = format_handler.discover(stream_config, file_cxt.path, ext, file)
                 json_schemas.append(json_schema)
             else:
-                format_handler.sync(stream_config, schema, mdata, path, ext, file)
+                format_handler.sync(stream_config, schema, mdata, file_cxt.path, ext, file)
 
+    max_modified_date = last_modified_date
     for file_cxt in files:
         LOGGER.info('{}: {}'.format(operating_mode_log, file_cxt.path))
+
+        modified_date = get_modified_date(file_cxt)
+
+        if last_modified_date and modified_date < last_modified_date:
+            continue
 
         if is_zip_archive:
             zip_file = ZipFileSystem(file_cxt)
@@ -65,13 +83,12 @@ def sync_path(stream_config, schema, mdata, discover_mode, path):
         else:
             handle_file(file_cxt)
 
-    return json_schemas
+        if modified_date > max_modified_date:
+            max_modified_date = modified_date
 
-def write_schema(stream):
-    schema = stream.schema.to_dict()
-    singer.write_schema(stream.tap_stream_id, schema, stream.key_properties)
+    return json_schemas, max_modified_date
 
-def sync_stream(stream_config, catalog, discover_mode):
+def sync_stream(stream_config, catalog, state, discover_mode):
     stream_name = stream_config['stream_name']
     schema = None
     mdata = None
@@ -79,7 +96,7 @@ def sync_stream(stream_config, catalog, discover_mode):
         stream = catalog.get_stream(stream_name)
         schema = stream.schema.to_dict()
         mdata = metadata.to_map(stream.metadata)
-        write_schema(stream)
+        singer.write_schema(stream.tap_stream_id, schema, stream.key_properties)
 
     paths = stream_config.get('paths') or [stream_config.get('path')]
 
@@ -89,13 +106,29 @@ def sync_stream(stream_config, catalog, discover_mode):
     if not paths or paths[0] is None:
         raise Exception('A stream config requires a "path" or "paths" key')
 
-    ## TODO: write out schema
+    last_modified_date = bookmarks.get_bookmark(stream_config['stream_name'], 'last_modified_date')
 
+    schemas = []
+    max_modified_date = last_modified_date
     for path in paths:
-        schemas = sync_path(stream_config, schema, mdata, discover_mode, path)
+        path_schemas, path_max_modified_date = sync_path(stream_config,
+                                                         schema,
+                                                         mdata,
+                                                         discover_mode,
+                                                         path,
+                                                         last_modified_date)
+        schemas += path_schemas
+        if path_max_modified_date > max_modified_date:
+            max_modified_date = path_max_modified_date
 
     if discover_mode:
         return merge_schemas(schemas)
+    else:
+        bookmarks.write_bookmark(state,
+                                 stream_config['stream_name'],
+                                 'last_modified_date',
+                                 max_modified_date)
+        singer.write_state(state)
 
 def discover(config, schemas):
     catalog = Catalog([])
@@ -140,16 +173,19 @@ def discover(config, schemas):
     json.dump(catalog.to_dict(), sys.stdout, indent=2)
 
 def update_current_stream(state, stream_name=None):  
-    set_currently_syncing(state, stream_name) 
+    bookmarks.set_currently_syncing(state, stream_name) 
     singer.write_state(state)
 
 def sync(config, catalog, state, discover_mode):
+    if not state:
+        state = {}
+
     selected_stream_names = None
     if not discover_mode and catalog:
         selected_streams = catalog.get_selected_streams(state)
         selected_stream_names = list(map(lambda x: x.tap_stream_id, selected_streams))
 
-    currently_syncing = get_currently_syncing(state or {})
+    currently_syncing = bookmarks.get_currently_syncing(state)
 
     schemas = {}
     for stream_config in config['streams']:
@@ -164,7 +200,7 @@ def sync(config, catalog, state, discover_mode):
         if not discover_mode:
             update_current_stream(state, stream_name)
 
-        schema = sync_stream(stream_config, catalog, discover_mode)
+        schema = sync_stream(stream_config, catalog, state, discover_mode)
 
         schemas[stream_name] = schema
 

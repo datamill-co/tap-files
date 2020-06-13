@@ -4,6 +4,7 @@ import singer
 from singer import metrics, Transformer
 
 from tap_files.discover_utils import schema_from_dict_sample
+from tap_files.discover_utils import SDC_SOURCE_PATH_COLUMN
 
 LOGGER = singer.get_logger()
 
@@ -21,8 +22,8 @@ class BaseFormatHandler:
         with metrics.record_counter(stream_name) as counter:
             with Transformer() as transformer:
                 for record in reader:
-                    ## TODO: add metadata columns: filepath, line number?, date modified from filesystem
-                    ## TODO: date modified / bookmark support
+                    self._add_path_to_record(record, path)
+
                     if schema:
                         try:
                             record = transformer.transform(record,
@@ -42,11 +43,15 @@ class BaseFormatHandler:
         rows = []
         try:
             for i in range(discover_sample_size):
-                rows.append(next(reader))
+                rows.append(self._add_path_to_record(next(reader), path))
         except StopIteration:
             pass
 
         return schema_from_dict_sample(rows, stream_config)
+
+    def _add_path_to_record(self, record, path):
+        record[SDC_SOURCE_PATH_COLUMN] = path
+        return record
 
     def _get_rows_reader(self, stream_config, ext, file):
         raise NotImplementedError()

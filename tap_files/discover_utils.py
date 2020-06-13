@@ -1,5 +1,8 @@
 from datetime import datetime
 
+SDC_SOURCE_PATH_COLUMN = '_sdc_source_path'
+SDC_SOURCE_LINENO_COLUMN = '_sdc_source_lineno'
+
 ALLOWED_SIMPLE_SCHEMA_KEYS = [
     'type',
     'format'

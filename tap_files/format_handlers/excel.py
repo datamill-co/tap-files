@@ -1,4 +1,5 @@
 from tap_files.format_handlers.base import BaseFormatHandler
+from tap_files.discover_utils import SDC_SOURCE_LINENO_COLUMN
 
 class ExcelFormatHandler(BaseFormatHandler):
     format_name = 'excel'
@@ -7,6 +8,7 @@ class ExcelFormatHandler(BaseFormatHandler):
 
     def _get_rows_reader(self, stream_config, ext, file):
         format_options = stream_config.get('format_options', {})
+        skip_lines = format_options.get('skip_lines')
 
         if ext == 'xlsx':
             reader = self._xlsx(format_options, file)
@@ -15,10 +17,16 @@ class ExcelFormatHandler(BaseFormatHandler):
         else:
             raise Exception('Excel extension "{}" not supported'.format(ext))
 
+        ## TODO: allow specifying headers like CSV
         headers = next(reader)
 
+        line_num = 1 # header is 1
+
         for row in reader:
-            yield dict(zip(headers, row))
+            record = dict(zip(headers, row))
+            line_num += 1
+            record[SDC_SOURCE_LINENO_COLUMN] = line_num
+            yield record
 
     def _xlsx(self, format_options, file):
         from openpyxl import load_workbook

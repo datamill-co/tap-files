@@ -4,6 +4,7 @@ import orjson
 from fsspec.implementations.zip import ZipFileSystem
 
 from tap_files.format_handlers.base import BaseFormatHandler
+from tap_files.discover_utils import SDC_SOURCE_LINENO_COLUMN
 
 class GISFormatHandler(BaseFormatHandler):
     format_name = 'gis'
@@ -13,6 +14,7 @@ class GISFormatHandler(BaseFormatHandler):
 
     def _get_rows_reader(self, stream_config, ext, file):
         format_options = stream_config.get('format_options', {})
+        skip_lines = format_options.get('skip_lines')
         file_gis_format = format_options.get('file_gis_format', 'shp')
         is_shp_archive = format_options.get('is_shp_archive', True)
         geom_fieldname = format_options.get('geom_fieldname', 'geom')
@@ -55,17 +57,24 @@ class GISFormatHandler(BaseFormatHandler):
         elif file_gis_format in ['geojson', 'ldgeojson'] or ext in ['json', 'geojson', 'ldgeojson']:
             text_file = io.TextIOWrapper(file, encoding='utf-8')
             if format_options.get('line_delimited') == True or ext == 'ldgeojson':
-                ## TODO: skip lines options? - make sure to account for in line number col
+                line_num = 0
+                if skip_lines:
+                    for i in range(skip_lines):
+                        next(text_file)
+                        line_num += 1
+
                 for line in text_file:
-                    row = orjson.loads(line)
-                    yield from self._transform_geojson(geom_fieldname, geojson)
+                    record = orjson.loads(line)
+                    line_num += 1
+                    record[SDC_SOURCE_LINENO_COLUMN] = line_num
+                    yield from self._transform_geojson(geom_fieldname, record)
             else:
                 raw_json = orjson.loads(text_file.read())
                 if isinstance(raw_json, list):
-                    for row in raw_json:
-                        yield from self._transform_geojson(geom_fieldname, geojson)
+                    for record in raw_json:
+                        yield from self._transform_geojson(geom_fieldname, record)
                 else:
-                    yield from self._transform_geojson(geom_fieldname, geojson)
+                    yield from self._transform_geojson(geom_fieldname, raw_json)
         else:
             raise Exception('GIS input file format not supported: "{}"'.format(file_gis_format))
 
