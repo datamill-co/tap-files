@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
 
-import sys
-import json
-import argparse
-
 import singer
 from singer import metadata
 
@@ -19,7 +15,7 @@ REQUIRED_CONFIG_KEYS = [
 def main():
     parsed_args = singer.utils.parse_args(REQUIRED_CONFIG_KEYS)
 
-    if parsed_args.discover:
-        raise NotImplementedError()
-    else:
-        sync(parsed_args.config)
+    sync(parsed_args.config,
+         parsed_args.catalog,
+         parsed_args.state,
+         parsed_args.discover)

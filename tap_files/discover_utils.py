@@ -1,3 +1,5 @@
+from datetime import datetime
+
 ALLOWED_SIMPLE_SCHEMA_KEYS = [
     'type',
     'format'
@@ -106,6 +108,9 @@ def merge_schemas(schemas):
     return current_schema
 
 def infer_type(value):
+    if value == '':
+        return None
+
     ## Some formats, like JSON, generate some typed values
     if isinstance(value, int):
         return 'integer'
@@ -132,13 +137,30 @@ def infer_type(value):
 
 def infer_simple_type_schema(value):
     ## TODO: check datetime_fields and boolean_fields - support nested paths?
-    json_type = infer_type(value)
-    return {
+
+    ## Excel and other file formats have a datetime type
+    if isinstance(value, datetime):
+        return {
+            'type': [
+                'null',
+                'string'
+            ],
+            'format': 'date-time'
+        }
+
+    ## TODO: if type is string, sniff for datetime formats
+
+    json_schema = {
         'type': [
-            'null',
-            json_type
+            'null'
         ]
     }
+
+    json_type = infer_type(value)
+    if json_type:
+        json_schema['type'].append(json_type)
+
+    return json_schema
 
 def infer_array_schema(value):
     schemas = []
