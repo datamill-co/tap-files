@@ -8,6 +8,7 @@ class ExcelFormatHandler(BaseFormatHandler):
 
     def _get_rows_reader(self, stream_config, ext, file):
         format_options = stream_config.get('format_options', {})
+        fieldnames = format_options.get('fieldnames')
         skip_lines = format_options.get('skip_lines')
 
         if ext == 'xlsx':
@@ -17,10 +18,17 @@ class ExcelFormatHandler(BaseFormatHandler):
         else:
             raise Exception('Excel extension "{}" not supported'.format(ext))
 
-        ## TODO: allow specifying headers like CSV
-        headers = next(reader)
+        if fieldnames:
+            headers = fieldnames
+            line_num = 0
+        else:
+            headers = next(reader)
+            line_num = 1 # header is 1
 
-        line_num = 1 # header is 1
+        if skip_lines:
+            for i in range(skip_lines):
+                next(reader)
+                line_num += 1
 
         for row in reader:
             record = dict(zip(headers, row))

@@ -28,15 +28,19 @@ BASIC_CONFIG = {
 }
 
 def test_basic_csv(capsys):
-    sync(BASIC_CONFIG, None, None)
+    sync(BASIC_CONFIG, None, None, False)
 
     captured = capsys.readouterr()
     raw_messages = captured.out.split('\n')
 
     message = json.loads(raw_messages[0])
-    assert message['record']['id'] == '11934c13-8acd-45b6-b49f-b01dcfa456d0'
+    assert message['type'] == 'STATE'
+    assert message['value'] == {'currently_syncing': 'order_items'}
 
     message = json.loads(raw_messages[1])
+    assert message['record']['id'] == '11934c13-8acd-45b6-b49f-b01dcfa456d0'
+
+    message = json.loads(raw_messages[2])
     assert message['record']['id'] == '59d9a7f0-95c7-4920-b369-67bf94aebce2'
 
 def test_basic_csv_no_headers(capsys):
@@ -57,19 +61,23 @@ def test_basic_csv_no_headers(capsys):
 
     config['streams'][0]['format_options'] = format_options
 
-    sync(config, None, None)
+    sync(config, None, None, False)
 
     captured = capsys.readouterr()
     raw_messages = captured.out.split('\n')
 
     message = json.loads(raw_messages[0])
-    assert message['record']['id'] == '11934c13-8acd-45b6-b49f-b01dcfa456d0'
+    assert message['type'] == 'STATE'
+    assert message['value'] == {'currently_syncing': 'order_items'}
 
     message = json.loads(raw_messages[1])
+    assert message['record']['id'] == '11934c13-8acd-45b6-b49f-b01dcfa456d0'
+
+    message = json.loads(raw_messages[2])
     assert message['record']['id'] == '59d9a7f0-95c7-4920-b369-67bf94aebce2'
 
 def test_basic_csv_discover(capsys):
-    sync(BASIC_CONFIG, None, True)
+    sync(BASIC_CONFIG, None, None, True)
 
     expected_catalog = {
       "streams": [
@@ -120,6 +128,18 @@ def test_basic_csv_discover(capsys):
                 "type": [
                   "null",
                   "number"
+                ]
+              },
+              "_sdc_source_lineno": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "_sdc_source_path": {
+                "type": [
+                  "null",
+                  "string"
                 ]
               }
             },
@@ -192,6 +212,24 @@ def test_basic_csv_discover(capsys):
               "breadcrumb": [
                 "properties",
                 "total"
+              ]
+            },
+            {
+              "metadata": {
+                "inclusion": "available"
+              },
+              "breadcrumb": [
+                "properties",
+                "_sdc_source_lineno"
+              ]
+            },
+            {
+              "metadata": {
+                "inclusion": "available"
+              },
+              "breadcrumb": [
+                "properties",
+                "_sdc_source_path"
               ]
             }
           ]

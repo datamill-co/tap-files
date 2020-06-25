@@ -22,7 +22,7 @@ class CSVFormatHandler(BaseFormatHandler):
         reader = csv.DictReader(
             file,
             **format_options_defaults,
-            **{k: v for k, v in format_options.items() if k in ['delimiter']}
+            **{k: v for k, v in format_options.items() if k in ['delimiter', 'fieldnames']}
         )
 
         line_num = 1 # header is 1

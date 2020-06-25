@@ -1,5 +1,6 @@
 import sys
 import json
+from datetime import datetime
 
 import fsspec
 import singer
@@ -17,12 +18,18 @@ LAST_MODIFIED_FIELDS = [
     'mtime' # local, sftp
 ]
 
-def get_modified_date(file_cxt):
-    if hasattr(file_cxt, 'details'):
+def get_modified_date(file):
+    modified_date = None
+    if hasattr(file, 'details'):
         for field in LAST_MODIFIED_FIELDS:
-            if field in file_cxt.details:
-                return file_cxt.details[field]
-    return None
+            if field in file.details:
+                modified_date = file.details[field]
+                break
+
+        if isinstance(modified_date, datetime):
+            modified_date = modified_date.isoformat()
+
+    return modified_date
 
 def sync_path(stream_config, schema, mdata, discover_mode, path, last_modified_date):
     format_options = stream_config.get('format_options', {})
@@ -55,40 +62,42 @@ def sync_path(stream_config, schema, mdata, discover_mode, path, last_modified_d
 
     json_schemas = []
 
-    def handle_file(modified_date, path, file_cxt):
-        with file_cxt as file:
-            if discover_mode:
-                json_schema = format_handler.discover(stream_config, path, ext, file, modified_date)
-                json_schemas.append(json_schema)
-            else:
-                format_handler.sync(stream_config, schema, mdata, path, ext, file, modified_date)
+    def handle_file(modified_date, path, file):
+        if discover_mode:
+            json_schema = format_handler.discover(stream_config, path, ext, file, modified_date)
+            json_schemas.append(json_schema)
+        else:
+            format_handler.sync(stream_config, schema, mdata, path, ext, file, modified_date)
 
     max_modified_date = last_modified_date
     for file_cxt in files:
         LOGGER.info('{}: {}'.format(operating_mode_log, file_cxt.path))
 
-        modified_date = get_modified_date(file_cxt)
+        with file_cxt as file:
+            modified_date = get_modified_date(file)
 
-        if last_modified_date and modified_date < last_modified_date:
-            continue
+            if last_modified_date and modified_date < last_modified_date:
+                continue
 
-        if is_zip_archive:
-            zip_file = ZipFileSystem(file_cxt)
-            for filename in zip_file.ls('/'):
-                if filename.split('.')[-1] in format_handler.extensions:
-                    LOGGER.info('{} from archive: {} - {}'.format(operating_mode_log, file_cxt.path, filename))
-                    with zip_file.open(filename, mode=format_handler.file_mode) as zip_file_cxt:
-                        handle_file(modified_date, file_cxt.path, zip_file_cxt)
-        else:
-            handle_file(modified_date, file_cxt.path, file_cxt)
+            if is_zip_archive:
+                zip_file = ZipFileSystem(file)
+                for filename in zip_file.ls('/'):
+                    if filename.split('.')[-1] in format_handler.extensions:
+                        LOGGER.info('{} from archive: {} - {}'.format(operating_mode_log, file_cxt.path, filename))
+                        with zip_file.open(filename, mode=format_handler.file_mode) as zip_file_cxt:
+                            handle_file(modified_date, file_cxt.path, zip_file_cxt)
+            else:
+                handle_file(modified_date, file_cxt.path, file)
 
-        if not modified_date or modified_date > max_modified_date:
-            max_modified_date = modified_date
+            if not modified_date or not max_modified_date or modified_date > max_modified_date:
+                max_modified_date = modified_date
 
     return json_schemas, max_modified_date
 
 def sync_stream(stream_config, catalog, state, discover_mode):
     stream_name = stream_config['stream_name']
+    ## since there can be multiple configs per stream
+    bookmark_name = stream_config.get('bookmark_name', stream_name)
     schema = None
     mdata = None
     if catalog:
@@ -105,7 +114,9 @@ def sync_stream(stream_config, catalog, state, discover_mode):
     if not paths or paths[0] is None:
         raise Exception('A stream config requires a "path" or "paths" key')
 
-    last_modified_date = bookmarks.get_bookmark(state, stream_config['stream_name'], 'last_modified_date')
+    last_modified_date = bookmarks.get_bookmark(state,
+                                                bookmark_name,
+                                                'last_modified_date')
 
     schemas = []
     max_modified_date = last_modified_date
@@ -124,7 +135,7 @@ def sync_stream(stream_config, catalog, state, discover_mode):
         return merge_schemas(schemas)
     else:
         bookmarks.write_bookmark(state,
-                                 stream_config['stream_name'],
+                                 bookmark_name,
                                  'last_modified_date',
                                  max_modified_date)
         singer.write_state(state)
