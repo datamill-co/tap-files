@@ -20,8 +20,8 @@ This tap uses the [fsspec](https://github.com/intake/filesystem_spec) project to
 | local file system | Y |
 | FTP / SFTP | Y |
 | S3 | Y |
-| Google Cloud Storage (GCS) | |
-| Azure Blob Storage / Azure Datalake Gen2 | |
+| Google Cloud Storage (GCS) | Y |
+| Azure Blob Storage / Azure Datalake | Y |
 | Dropbox | |
 | HTTP / HTTPS | |
 | HDFS / WebHDFS | |
@@ -39,7 +39,7 @@ The local file system would also support anything mounted to the local file syst
 | csv | .csv, .tsv | Defaults to "," delimiter. Defaults to tab delimiter if extension is .tsv |
 | excel | .xlsx, .xls | |
 | gis | .shp, .geojson, .ldgeojson | Supports converting spatial projection using the `to_crs` format option. Defaults to adding a `geom` field with stringified geojson. |
-| json | .json, .ldjson | Also supported line-delimited JSON (ldjson) |
+| json | .json, .ldjson | Also supports line-delimited JSON (ldjson) |
 
 ## Usage
 

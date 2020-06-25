@@ -14,8 +14,10 @@ from tap_files.discover_utils import merge_schemas
 LOGGER = singer.get_logger()
 
 LAST_MODIFIED_FIELDS = [
-    'LastModified', # s3
-    'mtime' # local, sftp
+    'LastModified', # S3
+    'updated', # GCS
+    'modificationTime', # Azure Blob Storage, Azure Datalake
+    'mtime' # local, FTP/SFTP
 ]
 
 def get_modified_date(file):
