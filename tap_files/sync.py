@@ -201,11 +201,13 @@ def sync(config, catalog, state, discover_mode):
     for stream_config in config['streams']:
         stream_name = stream_config['stream_name']
 
-        if (selected_stream_names and stream_name not in selected_stream_names) or \
-           (not selected_stream_names and \
-            currently_syncing is not None and \
+        if (catalog and stream_name not in selected_stream_names) or \
+           (currently_syncing is not None and \
             currently_syncing != stream_name):
             continue
+
+        if currently_syncing == stream_name:
+            currently_syncing = None
 
         if not discover_mode:
             update_current_stream(state, stream_name)
