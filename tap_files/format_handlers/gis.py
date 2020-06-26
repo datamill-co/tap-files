@@ -115,6 +115,9 @@ class GISFormatHandler(BaseFormatHandler):
         if to_crs:
             df = df.fillna({'geometry': Polygon()}).to_crs(to_crs)
 
+        ## make NaNs null
+        df = df.where(df.notnull(), None)
+
         for index, row in df.iterrows():
             record = row.to_dict()
             del record['geometry']
