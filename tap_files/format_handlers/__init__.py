@@ -2,12 +2,14 @@ from tap_files.format_handlers.csv import CSVFormatHandler
 from tap_files.format_handlers.json import JSONFormatHandler
 from tap_files.format_handlers.excel import ExcelFormatHandler
 from tap_files.format_handlers.gis import GISFormatHandler
+from tap_files.format_handlers.fixedwidth import FixedWidthFormatHandler
 
 FORMAT_HANDLERS = [
     CSVFormatHandler,
     JSONFormatHandler,
     ExcelFormatHandler,
-    GISFormatHandler
+    GISFormatHandler,
+    FixedWidthFormatHandler
 ]
 
 FORMAT_HANDLERS_MAP = {}
