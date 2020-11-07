@@ -5,6 +5,7 @@ class ExcelFormatHandler(BaseFormatHandler):
     format_name = 'excel'
     extensions = ['xlsx', 'xls']
     default_extension = 'xlsx'
+    file_mode = 'rb'
 
     def _get_rows_reader(self, stream_config, ext, file):
         format_options = stream_config.get('format_options', {})
