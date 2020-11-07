@@ -5,7 +5,7 @@ from tap_files.discover_utils import SDC_SOURCE_LINENO_COLUMN
 
 class CSVFormatHandler(BaseFormatHandler):
     format_name = 'csv'
-    extensions = ['csv', 'tsv']
+    extensions = ['csv', 'tsv', 'txt']
     default_extension = 'csv'
 
     def _get_rows_reader(self, stream_config, ext, file):
@@ -21,8 +21,10 @@ class CSVFormatHandler(BaseFormatHandler):
 
         reader = csv.DictReader(
             file,
-            **format_options_defaults,
-            **{k: v for k, v in format_options.items() if k in ['delimiter', 'fieldnames']}
+            **{
+                **format_options_defaults,
+                **{k: v for k, v in format_options.items() if k in ['delimiter', 'fieldnames']}
+            }
         )
 
         line_num = 1 # header is 1
