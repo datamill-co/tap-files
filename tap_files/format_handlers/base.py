@@ -43,7 +43,9 @@ class BaseFormatHandler:
         rows = []
         try:
             for i in range(discover_sample_size):
-                rows.append(self._add_metadata_to_record(next(reader), path, modified_date))
+                # for record in reader:
+                record = next(reader)
+                rows.append(self._add_metadata_to_record(record, path, modified_date))
         except StopIteration:
             pass
 

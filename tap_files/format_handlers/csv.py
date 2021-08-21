@@ -11,6 +11,7 @@ class CSVFormatHandler(BaseFormatHandler):
     def _get_rows_reader(self, stream_config, ext, file):
         format_options = stream_config.get('format_options', {})
         skip_lines = format_options.get('skip_lines')
+        preheader_skip_lines = format_options.get('preheader_skip_lines')
 
         format_options_defaults = {
             'delimiter': ','
@@ -18,6 +19,12 @@ class CSVFormatHandler(BaseFormatHandler):
 
         if ext == 'tsv':
             format_options_defaults['delimiter'] = '\t'
+
+        line_num = 0
+        if preheader_skip_lines:
+            for i in range(preheader_skip_lines):
+                next(file)
+                line_num += 1
 
         reader = csv.DictReader(
             file,

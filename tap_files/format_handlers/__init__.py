@@ -3,13 +3,15 @@ from tap_files.format_handlers.json import JSONFormatHandler
 from tap_files.format_handlers.excel import ExcelFormatHandler
 from tap_files.format_handlers.gis import GISFormatHandler
 from tap_files.format_handlers.fixedwidth import FixedWidthFormatHandler
+from tap_files.format_handlers.xml import XMLFormatHandler
 
 FORMAT_HANDLERS = [
     CSVFormatHandler,
     JSONFormatHandler,
     ExcelFormatHandler,
     GISFormatHandler,
-    FixedWidthFormatHandler
+    FixedWidthFormatHandler,
+    XMLFormatHandler
 ]
 
 FORMAT_HANDLERS_MAP = {}

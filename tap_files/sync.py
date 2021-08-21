@@ -155,7 +155,14 @@ def discover(config, schemas):
         if isinstance(key_properties, str):
             key_properties = [key_properties]
 
-        metadata = []
+        metadata = [
+            {
+              'metadata': {
+                'selected': True
+              },
+              'breadcrumb': []
+            }
+        ]
         properties = {}
         for prop in sorted(list(schema['properties'].keys())):
             properties[prop] = schema['properties'][prop]
@@ -220,7 +227,7 @@ def sync(config, catalog, state, discover_mode):
         if schema:
             current_stream_schema = schemas.get(stream_name)
             if current_stream_schema:
-                schemas[stream_name] = merge_schemas(current_stream_schema, schema)
+                schemas[stream_name] = merge_schemas([current_stream_schema, schema])
             else:
                 schemas[stream_name] = schema
 
