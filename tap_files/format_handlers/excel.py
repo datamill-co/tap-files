@@ -12,14 +12,45 @@ class ExcelFormatHandler(BaseFormatHandler):
         fieldnames = format_options.get('fieldnames')
         tiered_headers = format_options.get('tiered_headers')
         preheader_skip_lines = format_options.get('preheader_skip_lines')
+        findheader = format_options.get('findheader')
         skip_lines = format_options.get('skip_lines')
 
-        if ext == 'xlsx':
-            reader = self._xlsx(format_options, file)
-        elif ext == 'xls':
-            reader = self._xls(format_options, file)
-        else:
-            raise Exception('Excel extension "{}" not supported'.format(ext))
+        reader = self._get_excel_reader(ext, format_options, file)
+
+        if findheader and not preheader_skip_lines:
+            cur_cols = 0
+            max_cols = 0
+            last_cols = 0
+            header_row_num = 0
+            i = 0
+            stable = 0
+            for row in reader:
+                for k in range(len(row)):
+                    if row[-(k+1)] is not None:
+                        cur_cols = len(row) - k
+                        break
+                if last_cols == cur_cols:
+                    stable += 1
+                else:
+                    stable = 0
+                if cur_cols > max_cols:
+                    max_cols = cur_cols
+                    header_row_num = i
+
+                last_cols = cur_cols
+                i += 1
+
+                if stable > 10:
+                    preheader_skip_lines = header_row_num # header nummber is zero indexed
+                    if preheader_skip_lines <= 0:
+                        preheader_skip_lines = None
+                    break
+
+            if stable < 10:
+                raise Exception('Header finder could not find a stable header row')
+
+            # reset reader
+            reader = self._get_excel_reader(ext, format_options, file)
 
         line_num = 0
 
@@ -62,6 +93,14 @@ class ExcelFormatHandler(BaseFormatHandler):
             record[SDC_SOURCE_LINENO_COLUMN] = line_num
 
             yield record
+
+    def _get_excel_reader(self, ext, format_options, file):
+        if ext == 'xlsx':
+            return self._xlsx(format_options, file)
+        elif ext == 'xls':
+            return self._xls(format_options, file)
+        else:
+            raise Exception('Excel extension "{}" not supported'.format(ext))
 
     def _xlsx(self, format_options, file):
         from openpyxl import load_workbook
