@@ -23,7 +23,7 @@ class GISFormatHandler(BaseFormatHandler):
     default_extension = 'shp'
     file_mode = 'rb'
 
-    def _get_rows_reader(self, stream_config, ext, file):
+    def _get_rows_reader(self, stream_name, stream_config, ext, file):
         format_options = stream_config.get('format_options', {})
         skip_lines = format_options.get('skip_lines')
         file_gis_format = format_options.get('file_gis_format', 'shp')

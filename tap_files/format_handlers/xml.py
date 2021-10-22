@@ -1,5 +1,3 @@
-import xmltodict
-
 from tap_files.format_handlers.base import BaseFormatHandler
 
 class XMLFormatHandler(BaseFormatHandler):
@@ -8,7 +6,9 @@ class XMLFormatHandler(BaseFormatHandler):
     default_extension = 'xml'
     file_mode = 'rt'
 
-    def _get_rows_reader(self, stream_config, ext, file):
+    def _get_rows_reader(self, stream_name, stream_config, ext, file):
+        import xmltodict
+
         format_options = stream_config.get('format_options', {})
         path = format_options.get('path', [])
 

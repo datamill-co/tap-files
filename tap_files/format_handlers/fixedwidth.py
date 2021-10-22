@@ -18,7 +18,7 @@ class FixedWidthFormatHandler(BaseFormatHandler):
             return 'float64'
         return 'object'
 
-    def _get_rows_reader(self, stream_config, ext, file):
+    def _get_rows_reader(self, stream_name, stream_config, ext, file):
         format_options = stream_config.get('format_options', {})
         skip_lines = format_options.get('skip_lines')
         columns = format_options.get('columns')

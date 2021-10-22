@@ -8,7 +8,7 @@ class JSONFormatHandler(BaseFormatHandler):
     extensions = ['json', 'ldjson']
     default_extension = 'json'
 
-    def _get_rows_reader(self, stream_config, ext, file):
+    def _get_rows_reader(self, stream_name, stream_config, ext, file, reader_gen=None):
         format_options = stream_config.get('format_options', {})
         skip_lines = format_options.get('skip_lines')
 

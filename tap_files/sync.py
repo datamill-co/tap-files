@@ -33,7 +33,14 @@ def get_modified_date(file):
 
     return modified_date
 
-def sync_path(stream_config, schema, mdata, discover_mode, path, last_modified_date):
+def merge_schema_index(json_schemas_a, json_schemas_b):
+    for stream_name, schema in json_schemas_b.items():
+        if stream_name in json_schemas_a:
+            json_schemas_a[stream_name] = merge_schemas([json_schemas_a[stream_name], schema])
+        else:
+            json_schemas_a[stream_name] = schema
+
+def sync_path(stream_config, catalog, discover_mode, path, last_modified_date):
     format_options = stream_config.get('format_options', {})
     format_name = format_options.get('format')
     is_zip_archive = format_options.get('is_zip_archive', False)
@@ -62,14 +69,14 @@ def sync_path(stream_config, schema, mdata, discover_mode, path, last_modified_d
     else:
         operating_mode_log = 'Syncing'
 
-    json_schemas = []
+    json_schemas = {}
 
     def handle_file(modified_date, path, file):
         if discover_mode:
-            json_schema = format_handler.discover(stream_config, path, ext, file, modified_date)
-            json_schemas.append(json_schema)
+            file_json_schemas = format_handler.discover(stream_config, path, ext, file, modified_date)
+            merge_schema_index(json_schemas, file_json_schemas)
         else:
-            format_handler.sync(stream_config, schema, mdata, path, ext, file, modified_date)
+            format_handler.sync(stream_config, catalog, path, ext, file, modified_date)
 
     max_modified_date = last_modified_date
     for file_cxt in files:
@@ -100,13 +107,13 @@ def sync_stream(stream_config, catalog, state, discover_mode):
     stream_name = stream_config['stream_name']
     ## since there can be multiple configs per stream
     bookmark_name = stream_config.get('bookmark_name', stream_name)
-    schema = None
-    mdata = None
-    if catalog:
-        stream = catalog.get_stream(stream_name)
-        schema = stream.schema.to_dict()
-        mdata = metadata.to_map(stream.metadata)
-        singer.write_schema(stream.tap_stream_id, schema, stream.key_properties)
+    # schema = None
+    # mdata = None
+    # if catalog:
+    #     for stream in catalog.streams:
+    #         schema = stream.schema.to_dict()
+    #         mdata = metadata.to_map(stream.metadata)
+    #         singer.write_schema(stream.tap_stream_id, schema, stream.key_properties)
 
     paths = stream_config.get('paths') or [stream_config.get('path')]
 
@@ -120,21 +127,20 @@ def sync_stream(stream_config, catalog, state, discover_mode):
                                                 bookmark_name,
                                                 'last_modified_date')
 
-    schemas = []
+    schemas = {}
     max_modified_date = last_modified_date
     for path in paths:
         path_schemas, path_max_modified_date = sync_path(stream_config,
-                                                         schema,
-                                                         mdata,
+                                                         catalog,
                                                          discover_mode,
                                                          path,
                                                          last_modified_date)
-        schemas += path_schemas
+        merge_schema_index(schemas, path_schemas)
         if not max_modified_date or path_max_modified_date > max_modified_date:
             max_modified_date = path_max_modified_date
 
     if discover_mode:
-        return merge_schemas(schemas)
+        return schemas
     else:
         bookmarks.write_bookmark(state,
                                  bookmark_name,
@@ -144,16 +150,17 @@ def sync_stream(stream_config, catalog, state, discover_mode):
 
 def discover(config, schemas):
     catalog = Catalog([])
-    for stream_config in config['streams']:
-        stream_name = stream_config['stream_name']
-        if stream_name not in schemas:
-            raise Exception('Could not discover for stream "{}"'.format(stream_name))
+    for stream_name, schema in schemas.items():
+        # stream_name = stream_config['stream_name']
+        # if stream_name not in schemas:
+        #     raise Exception('Could not discover for stream "{}"'.format(stream_name))
 
-        schema = schemas[stream_name]
+        # schema = schemas[stream_name]
 
-        key_properties = stream_config.get('key_properties', [])
-        if isinstance(key_properties, str):
-            key_properties = [key_properties]
+        # key_properties = stream_config.get('key_properties', [])
+        # if isinstance(key_properties, str):
+        #     key_properties = [key_properties]
+        key_properties = []
 
         metadata = [
             {
@@ -210,10 +217,10 @@ def sync(config, catalog, state, discover_mode):
     for stream_config in config['streams']:
         stream_name = stream_config['stream_name']
 
-        if (catalog and stream_name not in selected_stream_names) or \
-           (currently_syncing is not None and \
-            currently_syncing != stream_name):
-            continue
+        # if (catalog and stream_name not in selected_stream_names) or \
+        #    (currently_syncing is not None and \
+        #     currently_syncing != stream_name):
+        #     continue
 
         if currently_syncing == stream_name:
             currently_syncing = None
@@ -221,15 +228,11 @@ def sync(config, catalog, state, discover_mode):
         if not discover_mode:
             update_current_stream(state, stream_name)
 
-        schema = sync_stream(stream_config, catalog, state, discover_mode)
+        stream_schemas = sync_stream(stream_config, catalog, state, discover_mode)
 
         ## streams config can have multiple entries per stream, ex different paths or file foramts
-        if schema:
-            current_stream_schema = schemas.get(stream_name)
-            if current_stream_schema:
-                schemas[stream_name] = merge_schemas([current_stream_schema, schema])
-            else:
-                schemas[stream_name] = schema
+        if stream_schemas:
+            merge_schema_index(schemas, stream_schemas)
 
     if discover_mode:
         discover(config, schemas)

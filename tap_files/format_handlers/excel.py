@@ -1,5 +1,15 @@
+import re
+
 from tap_files.format_handlers.base import BaseFormatHandler
 from tap_files.discover_utils import SDC_SOURCE_LINENO_COLUMN
+
+def get_gen(workbook, sheet_name):
+    def get_stream():
+        return workbook.get_sheet_by_name(sheet_name).values
+    return get_stream
+
+def normalize_name(name):
+    return re.sub(r'[^a-z0-9_]', '_', name.lower())
 
 class ExcelFormatHandler(BaseFormatHandler):
     format_name = 'excel'
@@ -7,7 +17,7 @@ class ExcelFormatHandler(BaseFormatHandler):
     default_extension = 'xlsx'
     file_mode = 'rb'
 
-    def _get_rows_reader(self, stream_config, ext, file):
+    def _get_rows_reader(self, stream_name, stream_config, ext, file, reader_gen=None):
         format_options = stream_config.get('format_options', {})
         fieldnames = format_options.get('fieldnames')
         tiered_headers = format_options.get('tiered_headers')
@@ -15,7 +25,10 @@ class ExcelFormatHandler(BaseFormatHandler):
         findheader = format_options.get('findheader')
         skip_lines = format_options.get('skip_lines')
 
-        reader = self._get_excel_reader(ext, format_options, file)
+        if reader_gen:
+            reader = reader_gen()
+        else:
+            reader = self._get_excel_reader(ext, format_options, file)
 
         if findheader and not preheader_skip_lines:
             cur_cols = 0
@@ -29,10 +42,13 @@ class ExcelFormatHandler(BaseFormatHandler):
                     if row[-(k+1)] is not None:
                         cur_cols = len(row) - k
                         break
+
                 if last_cols == cur_cols:
                     stable += 1
                 else:
                     stable = 0
+                    max_cols = 0
+
                 if cur_cols > max_cols:
                     max_cols = cur_cols
                     header_row_num = i
@@ -41,16 +57,19 @@ class ExcelFormatHandler(BaseFormatHandler):
                 i += 1
 
                 if stable > 10:
-                    preheader_skip_lines = header_row_num # header nummber is zero indexed
+                    preheader_skip_lines = header_row_num # header number is zero indexed
                     if preheader_skip_lines <= 0:
                         preheader_skip_lines = None
                     break
 
             if stable < 10:
-                raise Exception('Header finder could not find a stable header row')
+                raise Exception('Header finder could not find a stable header row for: {}'.format(stream_name))
 
             # reset reader
-            reader = self._get_excel_reader(ext, format_options, file)
+            if reader_gen:
+                reader = reader_gen()
+            else:
+                reader = self._get_excel_reader(ext, format_options, file)
 
         line_num = 0
 
@@ -68,8 +87,8 @@ class ExcelFormatHandler(BaseFormatHandler):
             headers = []
             for i in range(len(raw_headers)):
                 header = raw_headers[i]
-                if header is None and not tiered_headers:
-                    headers.append(header) ## kept so we know to skip below
+                if not tiered_headers and (header is None or header.strip() == ''):
+                    headers.append(None) ## kept so we know to skip below
                 else:
                     header_value = str(header or '').strip().replace('\n', ' ').replace("'", '')
                     if tiered_headers:
@@ -102,6 +121,30 @@ class ExcelFormatHandler(BaseFormatHandler):
         else:
             raise Exception('Excel extension "{}" not supported'.format(ext))
 
+    def _get_streams(self, stream_config, file):
+        from openpyxl import load_workbook
+
+        format_options = stream_config.get('format_options', {})
+        skip_by_index = format_options.get('skip_worksheet_by_index', [])
+        skip_by_name = format_options.get('skip_worksheet_by_name', [])
+
+        workbook = load_workbook(file)
+
+        streams = []
+        i = 0
+        for sheet_name in workbook.get_sheet_names():
+            k = i
+            i += 1
+            if k in skip_by_index or sheet_name in skip_by_name:
+                continue
+
+            streams.append([
+                stream_config['stream_name'] + '_' + normalize_name(sheet_name),
+                get_gen(workbook, sheet_name)
+            ])
+
+        return streams
+
     def _xlsx(self, format_options, file):
         from openpyxl import load_workbook
 
@@ -110,7 +153,7 @@ class ExcelFormatHandler(BaseFormatHandler):
         worksheet_name = format_options.get('worksheet_name')
         worksheet_index = format_options.get('worksheet_index')
         if worksheet_name:
-            worksheet = workbook.sheet_by_name(format_options['worksheet_name'])
+            worksheet = workbook.get_sheet_by_name(format_options['worksheet_name'])
         elif worksheet_index:
             worksheet = workbook.worksheets[worksheet_index]
         else:

@@ -4,6 +4,7 @@ from tap_files.format_handlers.excel import ExcelFormatHandler
 from tap_files.format_handlers.gis import GISFormatHandler
 from tap_files.format_handlers.fixedwidth import FixedWidthFormatHandler
 from tap_files.format_handlers.xml import XMLFormatHandler
+from tap_files.format_handlers.sas7bdat import SASFormatHandler
 
 FORMAT_HANDLERS = [
     CSVFormatHandler,
@@ -11,7 +12,8 @@ FORMAT_HANDLERS = [
     ExcelFormatHandler,
     GISFormatHandler,
     FixedWidthFormatHandler,
-    XMLFormatHandler
+    XMLFormatHandler,
+    SASFormatHandler
 ]
 
 FORMAT_HANDLERS_MAP = {}
