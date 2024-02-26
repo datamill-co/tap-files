@@ -10,7 +10,7 @@ setup(
     py_modules=['tap_files'],
     install_requires=[
         'fsspec==0.7.4',
-        'orjson==3.5.3',
+        'orjson==3.9.15',
         'singer-python==5.9.0'
     ],
     entry_points='''
